@@ -7,15 +7,15 @@ clear all; close all
 % folder, then hit "Select Folder" button on popup. Output is a struct
 % array with filenames for the emg data.
 if strcmp(computer, 'PCWIN64')
-    selpath = uigetdir('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\EMG\Raw EMG Data');
+    selpath = uigetdir('C:\Users\REDACTED');
     subid = selpath(end-10:end);
-    cd('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\raw data\vr')
+    cd('C:\Users\REDACTED')
     files = dir(['*' subid '*']);
     clear subid % remove this so as to not confuse with the datenum subid
 else
-    selpath = uigetdir('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/EMG/Raw EMG Data');
+    selpath = uigetdir('/Users/REDACTED');
     subid = selpath(end-10:end);
-    cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/raw data/vr')
+    cd('/Users/REDACTED')
     files = dir(['*' subid '*']);
     clear subid % remove this so as to not confuse with the datenum subid
 end
@@ -29,15 +29,15 @@ end
 for k = 1:length(files)
     %% Load in both xdf and emg data
     if strcmp(computer, 'PCWIN64')
-        cd('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\raw data\vr\');
+        cd('C:\Users\REDACTED');
         file = file(k).name;
         data = load_xdf(file);
-        emg = delsysEMGimport2(['C:\Users\Alex\Dropbox\Catholic U\VR_EXO\EMG\Raw EMG Data\' file(1:11) '/' file(1:end-4) '_emg.csv']); % This may take a few minutes
+        emg = delsysEMGimport2(['C:\Users\REDACTED' file(1:11) '/' file(1:end-4) '_emg.csv']); % This may take a few minutes
     else
         cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/raw data/vr/')
         file = [files(k).name(1:17) '.xdf'];
         data = load_xdf(file);
-        emg = delsysEMGimport2(['/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/EMG/Raw EMG Data/' file(1:11) '/' file(1:end-4) '_emg.csv']); % This may take a few minutes
+        emg = delsysEMGimport2(['/Users/REDACTED' file(1:11) '/' file(1:end-4) '_emg.csv']); % This may take a few minutes
     end
 
     emg = emg(2:end,:); % cut out NaN row
@@ -302,9 +302,9 @@ for k = 1:length(files)
     % Export Data to then load into Matlab 2013 & Neurospec 2.0
     
     if strcmp(computer, 'PCWIN64')
-        save(['C:\Users\Alex\Dropbox\Catholic U\VR_EXO\Neurospec development\neurospec_dev_data\',file(1:end-4),'_emg.mat'], 'ldelt', 'rdelt', 'lbicep', 'rbicep', 'trig', 'freq', 'onsetoffsetLH', 'onsetoffsetRH', 'targets')
+        save(['C:\Users\REDACTED\',file(1:end-4),'_emg.mat'], 'ldelt', 'rdelt', 'lbicep', 'rbicep', 'trig', 'freq', 'onsetoffsetLH', 'onsetoffsetRH', 'targets')
     else
-        save(['/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/Neurospec development/neurospec_dev_data/',file(1:end-4),'_emg.mat'], 'ldelt', 'rdelt', 'lbicep', 'rbicep', 'trig', 'freq', 'onsetoffsetLH', 'onsetoffsetRH', 'targets')
+        save(['/Users/REDACTED/',file(1:end-4),'_emg.mat'], 'ldelt', 'rdelt', 'lbicep', 'rbicep', 'trig', 'freq', 'onsetoffsetLH', 'onsetoffsetRH', 'targets')
     end
     clear targetSpawn targetHit centerEye rh lh rh_fu lh_fu emgData
 end
