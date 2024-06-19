@@ -23,10 +23,10 @@ invert = 1;
 file = uigetfile('*.xdf');
 % Load in xdf file from LabStreamLayer Recorder in Unity
 if strcmp(computer, 'PCWIN64')
-    data = load_xdf(['C:\Users\Alex\Dropbox\Catholic U\VR_EXO\raw data\vr\Wrist weight and healthy control manuscript data\' file]);
+    data = load_xdf(['C:\REDACTED\' file]);
 else
     cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/raw data/vr/Wrist weight and healthy control manuscript data/')
-    data = load_xdf(['/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/raw data/vr/Wrist weight and healthy control manuscript data/' file]);
+    data = load_xdf(['/Users/REDACTED/' file]);
 end
 
 %% Create arrays for each data stream's timeseries and timestamp data
@@ -406,11 +406,11 @@ block = ones(length(DVdataframe),1)*str2num(file(16:17)); % block (1-7 for contr
 % Insert subid and cond columns
 DFexport = [subid cond block DVdataframe];
 if strcmp(computer, 'PCWIN64')
-    cd('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\post processes data')
+    cd('C:\Users\REDACTED')
     save(['exovr_', num2str(subID), '_', file(13:14), '_', file(16:17), '.mat'], 'DFexport');
     cd('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\raw data\vr');
 else
-    cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/post processes data')
+    cd('/Users/REDACTED')
     save(['exovr_', num2str(subID), '_', file(13:14), '_', file(16:17), '.mat'], 'DFexport');
     cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/raw data/vr');
 end
