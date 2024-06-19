@@ -1,0 +1,123 @@
+---
+title: "CI_Stroke_Pilot"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(afex)
+library(readxl)
+```
+
+```{r Load in Data}
+# Mac computer
+# setwd('') # Mac
+# emg.data = read.delim('exovr_emgRMSE_bp.txt',header = FALSE, sep = ",", na.strings = 'NaN') # load in data
+# ci.data = read.delim('exovr_emgCI_bp.txt',header = FALSE, sep = ",", na.strings = 'NaN') # load in data
+
+# PC computer
+setwd('C:\\Users\\Alex\\Dropbox\\Catholic U\\VR_EXO\\EMG\\Raw EMG Data\\Manuscript Data') # PC
+emg.data = read.delim('exovr_emgRMSE_bp.txt',header = FALSE, sep = ",", na.strings = 'NaN') # load in data
+ci.inter.data = read.delim('exovr_emgCI_bp.txt',header = FALSE, sep = ",", na.strings = 'NaN') # load in data
+ci.intra.data = read.delim('exovr_emgCIintra_bp.txt',header = FALSE, sep = ",", na.strings = 'NaN') # load in data
+
+```
+
+```{r Load in Factors}
+colnames(ci.inter.data) = c('Subject', 'Condition', 'Block', 'Trial', 'Muscle', 'Band', 'Target', 'CI')
+colnames(ci.intra.data) = c('Subject', 'Condition', 'Block', 'Trial', 'Arm', 'Band', 'Target', 'CI')
+
+# Create new 'Level' factor. 
+shoulder = c(6,8,10)
+ci.inter.data = ci.inter.data %>% mutate(Level = case_when(Target %in% shoulder ~ "Shoulder", !Target %in% shoulder ~ "Eye")) %>% relocate(Level, .after = Target)
+ci.intra.data = ci.intra.data %>% mutate(Level = case_when(Target %in% shoulder ~ "Shoulder", !Target %in% shoulder ~ "Eye")) %>% relocate(Level, .after = Target)
+
+
+# Create new 'Location' factor
+loc = c(5,6) # Left of center targets
+mid = c(7,8) # Midline targets
+roc = c(9,10) # Right of center targets
+ci.inter.data = ci.inter.data %>% mutate(Location = case_when(Target %in% loc ~ "Left of center",
+                                                  Target %in% mid ~ "Midline",
+                                                  Target %in% roc ~ "Right of center")) %>% relocate(Location, .after = Level)
+ci.intra.data = ci.intra.data %>% mutate(Location = case_when(Target %in% loc ~ "Left of center",
+                                                  Target %in% mid ~ "Midline",
+                                                  Target %in% roc ~ "Right of center")) %>% relocate(Location, .after = Level)
+
+
+# Recode Condition to match intervention
+ci.inter.data = ci.inter.data %>% mutate(Condition = recode(Condition,'1' = "Baseline", '2' = "RH Weighted", '3' = "LH Weighted", '4' = "Combo")) %>%
+  mutate(Muscle = recode(Muscle,'1' = "Deltoid", '2' = "Biceps")) %>%
+  mutate(Band = recode(Band, '1' = "Alpha", '2' = "Beta", '3' = "Gamma"))
+
+ci.intra.data = ci.intra.data %>% mutate(Condition = recode(Condition,'1' = "Baseline", '2' = "RH Weighted", '3' = "LH Weighted", '4' = "Combo"))%>%
+  mutate(Arm = recode(Arm,'1' = "Left", '2' = "Right")) %>% 
+  mutate(Band = recode(Band, '1' = "Alpha", '2' = "Beta", '3' = "Gamma"))
+
+# Remove outlier participants (ie: left handers, no-shows, etc...)
+outliers = c()
+ci.inter.data = subset(ci.inter.data, !Subject %in% outliers)
+ci.intra.data = subset(ci.intra.data, !Subject %in% outliers)
+
+# Number of subjects
+nchan = 4 # Number of EMG channels
+nsub = nlevels(ci.inter.data$Subject)
+nblk = nlevels(ci.inter.data$Block)
+tempID = levels(ci.inter.data$Subject) # vector of subject levels
+
+# Set Factors
+factors = c('Subject', 'Condition', 'Block', 'Muscle', 'Band', 'Target')
+ci.inter.data[,factors] = lapply(ci.inter.data[,factors], factor)
+factors = c('Subject', 'Condition', 'Block', 'Arm', 'Band', 'Target')
+ci.intra.data[,factors] = lapply(ci.intra.data[,factors], factor)
+rm(factors)
+
+```
+
+```{r Data Wrangling}
+# %-change baseline correction
+ci.inter.data = ci.inter.data %>% group_by(Subject, Muscle, Band) %>%
+  mutate(CI.bc = 100*(CI - mean(CI[Block == 1], na.rm = T))/mean(CI[Block == 1], na.rm = T))
+
+# Outlier clean(any value outside 1.5*IQR)
+ci.inter.data = ci.inter.data %>% 
+  group_by(Condition, Muscle, Block, Band) %>%
+  mutate(CI.bc.oc = replace(CI.bc, (abs(CI.bc - median(CI.bc, na.rm = T)) > 1.5*IQR(CI.bc, na.rm = T)), NA))
+
+# Mean by block
+ci.inter.data.mbb = ci.inter.data %>%
+  select(-c(Trial, Target, Level, Location))%>%
+  group_by(Subject, Block, Condition, Muscle, Band)%>%
+  summarise_all(funs(mean(., na.rm = T)))
+
+# %-change
+ci.intra.data = ci.intra.data %>% group_by(Subject, Arm, Band) %>%
+  mutate(CI.bc = 100*(CI - mean(CI[Block == 1], na.rm = T))/mean(CI[Block == 1], na.rm = T))
+
+# Outlier clean (any value outside 1.5*IQR)
+ci.intra.data = ci.intra.data %>% 
+  group_by(Condition, Arm, Block, Band) %>%
+  mutate(CI.bc.oc = replace(CI.bc, (abs(CI.bc - median(CI.bc, na.rm = T)) > 1.5*IQR(CI.bc, na.rm = T)), NA))
+
+# Mean by block
+ci.intra.data.mbb = ci.intra.data %>%
+  select(-c(Trial, Target, Level, Location))%>%
+  group_by(Subject, Block, Condition, Arm, Band)%>%
+  summarise_all(funs(mean(., na.rm = T)))
+
+```
+
+```{r Plotting}
+# Boxplot - Full spectrum, both muscle FACTED, outlier clean
+ggplot(data = subset(ci.inter.data.mbb, !Condition == "Baseline"), aes(x = Condition, y = CI.bc, color = Condition))+
+  geom_boxplot()+
+  geom_hline(yintercept = 0,  linetype = 'dashed')+
+  facet_wrap(Muscle~Band)
+
+ggplot(data = subset(ci.intra.data.mbb, !Condition == "Baseline"), aes(x = Condition, y = CI.bc, color = Condition))+
+  geom_boxplot()+
+  geom_hline(yintercept = 0,  linetype = 'dashed')+
+  facet_wrap(Arm~Band)
+```
+

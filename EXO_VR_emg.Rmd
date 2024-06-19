@@ -1,0 +1,199 @@
+---
+title: "EXO_VR_emg"
+output: html_document
+---
+
+## Load packages
+```{r Load packages}
+library(tidyverse)
+library(afex)
+library(readxl)
+#'%notin%' <- Negate('%in%') # Make custom 'not in' function. Works exactly like != but with better results
+```
+
+```{r Import EMG data}
+# Mac computer
+setwd('//Users//alexbrunfeldt//Dropbox//Catholic U//VR_EXO//EMG//Raw EMG Data') # Mac
+emg.data = read.delim('exovr_emgRMSE_bp.txt',header = FALSE, sep = ",", na.strings = 'NaN') # load in data
+p.table = read_xlsx('//Users//alexbrunfeldt//Dropbox//Catholic U//VR_EXO//VR_participant_list.xlsx')
+ci.data = read.delim('exovr_emgCI_bp.txt',header = FALSE, sep = ",", na.strings = 'NaN') # load in data
+
+# PC computer
+# setwd('C:\\Users\\Alex\\Dropbox\\Catholic U\\VR_EXO\\EMG\\Raw EMG Data') # PC
+# emg.data = read.delim('exovr_emgRMSE_bp.txt',header = FALSE, sep = ",", na.strings = 'NaN') # load in data
+# p.table = read_xlsx('C:\\Users\\Alex\\Dropbox\\Catholic U\\VR_EXO\\VR_participant_list.xlsx')
+# ci.data = read.delim('exovr_emgCI_bp.txt',header = FALSE, sep = ",", na.strings = 'NaN') # load in data
+
+# Make sure the colnames match these (copied straight from Matlab)
+# [subid cond block trial muscle rmseLF];
+# Pre 12-07-20
+colnames(emg.data) = c('Subject', 'Condition', 'Block', 'Trial', 'Muscle', 'Target', 'rmse')
+emg.data$rmse = emg.data$rmse*1000 # convert to mV
+colnames(ci.data) = c('Subject', 'Condition', 'Block', 'Trial', 'Muscle', 'Band', 'Target', 'CI')
+
+# Create new 'Level' factor. 
+shoulder = c(6,8,10)
+ci.data = ci.data %>% mutate(Level = case_when(Target %in% shoulder ~ "Shoulder", !Target %in% shoulder ~ "Eye")) %>% relocate(Level, .after = Target)
+emg.data = emg.data %>% mutate(Level = case_when(Target %in% shoulder ~ "Shoulder", !Target %in% shoulder ~ "Eye")) %>% relocate(Level, .after = Target)
+
+# Create new 'Location' factor
+loc = c(5,6) # Left of center targets
+mid = c(7,8) # Midline targets
+roc = c(9,10) # Right of center targets
+ci.data = ci.data %>% mutate(Location = case_when(Target %in% loc ~ "Left of center",
+                                                  Target %in% mid ~ "Midline",
+                                                  Target %in% roc ~ "Right of center")) %>% relocate(Location, .after = Level)
+
+emg.data = emg.data %>% mutate(Location = case_when(Target %in% loc ~ "Left of center",
+                                                    Target %in% mid ~ "Midline",
+                                                    Target %in% roc ~ "Right of center")) %>% relocate(Location, .after = Level)
+
+# Recode Condition to match intervention
+emg.data = emg.data %>% mutate(Condition = recode(Condition,'1' = "Baseline", '2' = "RH weighted", '3' = "LH weighted", '4' = "Combo")) %>% mutate(Muscle = recode(Muscle,'1' = "L Deltoid", '2' = "R Deltoid", '3' = "L Bicep", '4' = "R Bicep"))
+
+ci.data = ci.data %>% mutate(Condition = recode(Condition,'1' = "Baseline", '2' = "RH weighted", '3' = "LH weighted", '4' = "Combo")) %>% mutate(Muscle = recode(Muscle,'1' = "Deltoid", '2' = "Biceps")) %>% mutate(Band = recode(Band, '1' = "Alpha", '2' = "Beta", '3' = "Gamma"))
+
+# Identify in the 'Load' factor in the VR_participant_list excel file
+subs.day1.30 = subset(p.table, grepl("3", Intervention))$subID01 # Find subjects who did 30% on day 1
+subs.day1.60 = subset(p.table, grepl("6", Intervention))$subID01 # Find subjects who did 60% on day 1
+subs.day2.30 = subset(p.table, !subID01 %in% subs.day1.30)$subID02 # Find subjects who did 30% on day 2
+subs.day2.60 = subset(p.table, !subID01 %in% subs.day1.60)$subID02 # Find subjects who did 60% on day 2
+
+# Add in the 'Load' and 'Day' factors for RMSE data
+emg.data = emg.data %>% mutate(Load = case_when(Subject %in% subs.day1.30 ~ "30%",
+                                              Subject %in% subs.day1.60 ~ "60%",
+                                              Subject %in% subs.day2.30 ~ "30%",
+                                              Subject %in% subs.day2.60 ~ "60%")) %>%
+                      mutate(Day = case_when(Subject %in% c(subs.day1.30, subs.day1.60) ~ "Day 1",
+                                          Subject %in% c(subs.day2.30, subs.day2.60) ~ "Day 2")) %>%
+                      relocate(Load, .after = Target) %>% relocate(Day, .after = Load)
+
+# Replace day 2 Subject identiers with the corresponding day 1 subject identifiers. NOTE: this is coded in the p.table variable from the Excel file!!!
+for (i in 1:nrow(p.table)){
+  if (!is.na(p.table$subID01[i]) & !is.na(p.table$subID02[i])) # Only recode non-"NA" values
+  {
+    emg.data[emg.data$Subject == p.table$subID02[i],]$Subject = p.table$subID01[i]
+  }
+}
+
+# Add in the 'Load' and 'Day' factors for CI data
+ci.data = ci.data %>% mutate(Load = case_when(Subject %in% subs.day1.30 ~ "30%",
+                                              Subject %in% subs.day1.60 ~ "60%",
+                                              Subject %in% subs.day2.30 ~ "30%",
+                                              Subject %in% subs.day2.60 ~ "60%")) %>%
+                      mutate(Day = case_when(Subject %in% c(subs.day1.30, subs.day1.60) ~ "Day 1",
+                                          Subject %in% c(subs.day2.30, subs.day2.60) ~ "Day 2")) %>%
+                      relocate(Load, .after = Target) %>% relocate(Day, .after = Load)
+
+# Replace day 2 Subject identiers with the corresponding day 1 subject identifiers. NOTE: this is coded in the p.table variable from the Excel file!!!
+for (i in 1:nrow(p.table)){
+  if (!is.na(p.table$subID01[i]) & !is.na(p.table$subID02[i])) # Only recode non-"NA" values
+  {
+    ci.data[ci.data$Subject == p.table$subID02[i],]$Subject = p.table$subID01[i]
+  }
+}
+
+# Remove outlier participants (ie: left handers, no-shows, etc...)
+outliers = c(73823902)
+emg.data = subset(emg.data, !Subject %in% outliers)
+ci.data = subset(ci.data, !Subject %in% outliers)
+
+# Number of subjects
+nchan = 4 # Number of EMG channels
+nsub = nlevels(emg.data$Subject)
+nblk = nlevels(emg.data$Block)
+tempID = levels(emg.data$Subject) # vector of subject levels
+
+# Set Factors
+factors = c('Subject', 'Condition', 'Block', 'Muscle', 'Target', 'Load', 'Day')
+emg.data[,factors] = lapply(emg.data[,factors], factor)
+factors = c('Subject', 'Condition', 'Block', 'Muscle', 'Band', 'Target', 'Load', 'Day')
+ci.data[,factors] = lapply(ci.data[,factors], factor)
+rm(subs.day1.30, subs.day1.60, subs.day2.30, subs.day2.60, factors, i)
+```
+
+```{r Data Wrangling, warning=FALSE}
+# Baseline correct (% Change from Block 1)
+emg.data = emg.data %>% group_by(Subject, Muscle, Day) %>% mutate(rmse.bc = 100*(rmse - mean(rmse[Block == 1]))/mean(rmse[Block == 1]))
+
+# Create new rmse ratio. Right side rmse divided by left side rmse. THis is so janky... pure hack job
+emg.data.Rdelt = subset(emg.data, Muscle %in% c("R Deltoid"))
+emg.data.Ldelt = subset(emg.data, Muscle %in% c("L Deltoid"))
+ratio = emg.data.Rdelt$rmse/(emg.data.Rdelt$rmse + emg.data.Ldelt$rmse)
+emg.data.delt = cbind(subset(emg.data.Rdelt, select = -c(Muscle, rmse, rmse.bc)), ratio)
+emg.data.delt = emg.data.delt %>% rename(rmse = ...10) %>% # WARNING: The number "10" might change...verify its location in the d.f.
+                mutate(Muscle = "Deltoid") %>%
+                relocate(Muscle, .after = Target)
+rm(emg.data.Ldelt, emg.data.Rdelt, ratio)
+
+emg.data.Rbicep = subset(emg.data, Muscle %in% c("R Bicep"))
+emg.data.Lbicep = subset(emg.data, Muscle %in% c("L Bicep"))
+ratio = emg.data.Rbicep$rmse/(emg.data.Rbicep$rmse + emg.data.Lbicep$rmse)
+emg.data.bicep = cbind(subset(emg.data.Rbicep, select = -c(Muscle, rmse, rmse.bc)), ratio)
+emg.data.bicep = emg.data.bicep %>% rename(rmse = ...10) %>% # WARNING: The number "10" might change...verify its location in the d.f.
+                mutate(Muscle = "Bicep") %>%
+                relocate(Muscle, .after = Target)
+rm(emg.data.Lbicep, emg.data.Rbicep, ratio)
+
+# Rebind the dataframes
+emg.data.ratio = rbind(emg.data.bicep, emg.data.delt)
+rm(emg.data.bicep, emg.data.delt)
+emg.data.ratio$Muscle = as.factor(emg.data.ratio$Muscle)
+emg.data.ratio$rmse = 100*emg.data.ratio$rmse # Convert to %
+
+# Baseline correct rmse ratio
+# As a %-change score
+# emg.data.ratio = emg.data.ratio %>% group_by(Subject, Muscle, Load) %>% mutate(rmse.bc = 100*(rmse - mean(rmse[Block == 1]))/mean(rmse[Block == 1]))
+
+# As was done for Relative Contribution
+emg.data.ratio = emg.data.ratio %>% group_by(Subject, Muscle, Load) %>% mutate(rmse.bc = rmse - mean(rmse[Block == 1]))
+
+# Outlier clean rmse.bc (any value outside 1.5*IQR)
+emg.data.ratio = emg.data.ratio %>% 
+  group_by(Condition, Load, Muscle, Block) %>%
+  mutate(rmse.bc.oc = replace(rmse.bc, (abs(rmse.bc - median(rmse.bc, na.rm = T)) > 1.5*IQR(rmse.bc, na.rm = T)), NA))
+
+# emg.data - Mean by block
+emg.data.mbb = emg.data %>% select(-c(Trial, Target, Day, Level, Location))%>%
+  group_by(Subject, Block, Condition, Load, Muscle)%>%
+  summarise_all(funs(mean(., na.rm = T)))
+
+# emg.data.ratio - Mean by block
+emg.data.ratio.mbb = emg.data.ratio %>% select(-c(Trial, Target, Day, Level, Location))%>%
+  group_by(Subject, Block, Condition, Load, Muscle)%>%
+  summarise_all(funs(mean(., na.rm = T)))
+
+# emg.data.ratio - SD by block
+emg.data.ratio.sdbb = emg.data.ratio %>% select(-c(Trial, Target, Day, Level, Location))%>%
+  group_by(Subject, Block, Condition, Load, Muscle)%>%
+  summarise_all(funs(sd(., na.rm = T)))
+```
+
+
+```{r Plotting}
+######## RMSE plotting ############3
+# ggplot(data = subset(emg.data, Subject == tempID[3] & Condition == 'Combo' & Muscle == c("L Deltoid", "R Deltoid")), aes(x = Trial, y = rmse.bc, color = Muscle))+
+#   geom_point()+
+#   geom_line()+
+#   geom_hline(yintercept = 0, linetype = 'dashed')
+
+ggplot(data = subset(emg.data, Muscle == c('L Deltoid', 'R Deltoid')), aes(x = Trial, y = rmse.bc, color = Muscle))+
+  geom_hline(yintercept = 0, linetype = 'dashed')+
+  stat_summary(fun.data = 'mean_se')+
+  facet_grid(~Condition)+
+  labs(y = "Baseline corrected RMSE (% Change)")+
+  theme(text = element_text(size = 14),
+        axis.text = element_text(size = 14))
+  
+###### Coherence Integral plotting ################
+ggplot(data = ci.data, aes(x = Trial, y = CI, color = Band))+
+  #geom_point()+
+  geom_smooth()+
+  facet_grid(Condition~Muscle)
+
+ggplot(data = ci.data, aes(x = Muscle, y = CI, fill = Condition))+
+  geom_boxplot()+
+  facet_grid(~Band)
+```
+
+

@@ -1,0 +1,506 @@
+---
+title: "EXO_VR_Results"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(afex)
+library(readxl)
+library(gridExtra)
+library(emmeans)
+
+####### YOU MUST RUN 'EXO_VR.Rmd' and 'EXO_VR_emg.Rmd' and then save the global environment to a workspace file before knitting this RMD ################
+# Also, you better be damn sure you are reading in the correct workspace... triple check this!
+# NOTE: As of 6.1.21, we are using 5-250 Hz bandpass filtered EMG data for all analyses and publication figs.
+load("C:\\Users\\Alex\\Dropbox\\Catholic U\\Manuscripts\\VR_EXO_healthies\\Review\\Routput\\211213_exovr_workspace.RData") #PC computer
+#load("//Users//alexbrunfeldt//Dropbox//Catholic U//Manuscripts//VR_EXO_healthies//Review//Routput//211213_exovr_workspace.RData") # Mac computer
+```
+# Outlier analysis
+## Relative contribution
+
+Left panel shows histograms (binwidth = 0.1) for the baseline corrected, but NOT outlier cleaned rel.cont data. On the right panel, these data have been outlier cleaned by removing values outside: median +/- 1.5*IQR.
+```{r Outlier Analysis rel.cont, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10, include=FALSE}
+p.rel.cont = ggplot(data = vr.data, aes(rel.cont.diff, fill = Condition))+
+  geom_histogram(position = 'identity', binwidth = 0.1)+
+  geom_vline(xintercept = 0, linetype = 'dashed')+
+  facet_grid(Condition~Load)+
+  guides(fill = "none")
+
+p.rel.cont.oc = ggplot(data = vr.data, aes(rel.cont.diff.oc, fill = Condition))+
+  geom_histogram(position = 'identity', binwidth = 0.1)+
+  geom_vline(xintercept = 0, linetype = 'dashed')+
+  facet_grid(Condition~Load)
+
+grid.arrange(p.rel.cont, p.rel.cont.oc, nrow=1)
+```
+
+**NOTE: I further analyses and plotting with the kinematic data is NOT done on outlier cleaned data as of 5/19/21**  
+
+## EMG Ratio
+
+Left panel shows histograms (binwidth = 1) for the baseline corrected, but NOT outlier cleaned emg.ratio data. On the right panel, these data have been outlier cleaned by removing values outside: median +/- 1.5*IQR.
+```{r Outlier Analysis EMG, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10, include=FALSE}
+p.rmse = ggplot(data = emg.data.ratio, aes(rmse.bc, fill = Condition))+
+          geom_histogram(position = 'identity', binwidth = 1)+
+          #coord_cartesian(xlim = c(-100,250))+
+          facet_grid(Location~Condition~Level)+
+          guides(fill = "none")
+
+p.rmse.oc = ggplot(data = emg.data.ratio, aes(rmse.bc.oc, fill = Condition))+
+          geom_histogram(position = 'identity', binwidth = 1)+
+          #coord_cartesian(xlim = c(-100,250))+
+          facet_grid(Location~Condition~Level)
+grid.arrange(p.rmse, p.rmse.oc, nrow=1)
+```
+
+# Kinematics
+
+## Relative Contribution
+### Baseline analysis
+Relative contribution at baseline was `r mean(subset(vr.data, Block == 1)$rel.cont)`(`r sd(subset(vr.data, Block == 1)$rel.cont)`), and a one-sample t.test comparing relative contribution to the value 50, shows participants did not favor one hand over the other.
+```{r RC at baseline, echo=FALSE}
+t.test((subset(vr.data.mbb, Block == 1)$rel.cont), mu = 50)
+```
+
+Further down in this analysis section, it appears participants might slightly favor their right hand during the 60% condition. Subanalysis t.tests show that in neither the 30% load (p = `r t.test((subset(vr.data.mbb, Block == 1 & Load %in% "30%")$rel.cont), mu = 50)$p.value`) nor in the 60% load (p = `r t.test((subset(vr.data.mbb, Block == 1 & Load %in% "60%")$rel.cont), mu = 50)$p.value`) is there a significant different from RC = 50.  
+
+***
+
+### Relative Contribution target factor analysis
+Targets can appear -15 degrees from midline, at midline, and +15 degrees from midline - at both eye and shoulder levels.  Targets 5,6 left of midline, targets 7,8 (midline), targets 9,10 right of midline. Odd target #s are EYE level, Even target #s are SHOULDER level.
+```{r RC target factor analysis, echo=FALSE, warning=FALSE, fig.width=20,fig.height=10}
+# Reintroduce the 'Target' factor to determine if target location influence relative contribution.
+vr.data.mbb.bt = vr.data %>% select(-c(Trial, Day)) %>% group_by(Subject, Block, Condition, Load, Target) %>% summarise_all(funs(mean(., na.rm = T)))
+ggplot(data = vr.data, aes(rel.cont.diff, fill = Condition))+
+  geom_histogram(position = 'identity', binwidth = 0.1)+
+  geom_vline(xintercept = 0, linetype = 'dashed')+
+  facet_grid(Condition~Load~Target)
+
+aov.rc.bt = aov_ez(data = subset(vr.data.mbb.bt, Block %in% c(1)), id = "Subject", dv = "rel.cont.diff", within = c("Target"))
+knitr::kable(nice(aov.rc.bt))
+```
+
+From the ANOVA table, there is a main effect for Target. Looking at the histogram plots, it appears participants reach farther with their right hands when reaching for targets on the left side and reach father with their left hands when reaching for targets on the right side. That is, they reach farther with the hand that is required to cross the midline of the body.  
+
+Therefore, I can baseline correct w.r.t. Subject and Day (just as before), but also include the 'Target' factor as a grouping variable. The effect is to mean subtract the mean by subject:day:target.
+```{r RC baseline correct by target, warning=FALSE, fig.width=20,fig.height=10}
+vr.data = vr.data %>% group_by(Subject, Day, Target)%>%
+  mutate(rel.cont.diff.bt = rel.cont - mean(rel.cont[Block == 1]))
+
+vr.data.mbb.bt = vr.data %>% select(-c(Trial, Day)) %>% group_by(Subject, Block, Condition, Load, Target) %>% summarise_all(funs(mean(., na.rm = T)))
+ggplot(data = vr.data, aes(rel.cont.diff.bt, fill = Condition))+
+  geom_histogram(position = 'identity', binwidth = 0.1)+
+  geom_vline(xintercept = 0, linetype = 'dashed')+
+  facet_grid(Condition~Load~Target)
+
+aov.rc.bt.bc = aov_ez(data = subset(vr.data.mbb.bt, Block %in% c(1)), id = "Subject", dv = "rel.cont.diff.bt", within = c("Target"))
+knitr::kable(nice(aov.rc.bt.bc))
+```
+
+As we can see from the histograms, the 'baseline' condition means are centered over zero now, regardless of target location. Re-running the one-way ANOVA shows the Target ME is gone now. **(6/1/21) I'll use this target location corrected data from here on...**   
+
+***
+### Timeseries analysis
+Relative contribution was assessed over 96 trials, over 5 sequential blocks (for 480 total trials). Each trial had participants reach to one of 6 targets, and the order of trials were such that each target location appeared within a consecutive 6 trial 'bin'. Therefore, I reduced the data to 6-trial bins, hence the new data frame *vr.data.mbbin*. **Note:** The data plotted here do not include blocks 3,5 (mid-experiment baselines)
+```{r RC timeseries (binned data), echo=FALSE, fig.width=20,fig.height=10}
+ggplot(data = subset(vr.data.mbbin, !Block %in% c(3,5)), aes(x = Bin, y = rel.cont, color = Condition))+
+  stat_summary(fun = 'mean', geom = 'line')+
+  stat_summary(fun.data = 'mean_se')+
+  geom_hline(yintercept = 50, linetype = 'dashed')+
+  ylab('Relative Contribution (%)')+
+  facet_grid(cols = vars(Load))+
+  coord_cartesian(ylim = c(45,55))
+
+# ANOVA with the 'Binned' data. Allows to check for main effect of time (rel. cont. changing overtime due to fatigue or learning)
+aov.rc.ts = aov_ez(data = subset(vr.data.mbbin, !Block %in% c(3,5) & Bin %in% c(1,16)), id = "Subject", dv = "rel.cont", within = c("Condition","Bin"))
+knitr::kable(nice(aov.rc.ts))
+```
+
+Running the within-subjects ANOVA shows no main effect for Bin (TIME). Therefore, we can rule out adaptation and fatigue. The effect of Condition is immediate and sustained.  
+
+***
+
+### Condition X Load Analysis
+Since relative contribution does not change over time, I will take the mean by block and run summary plots/ stats on the 'Condition' factor as a whole. Also, these data are the baseline corrected RC values. Therefore, I've removed the "Baseline" data from the graphs and stats.
+```{r RC condition x load omnibus, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10}
+ggplot(data = subset(vr.data, !Block %in% c(1,3,5)), aes(x = Condition, y = rel.cont.diff, fill = Load))+
+  geom_boxplot()+
+  ylab('\u0394 Relative Contribution (%)')+
+  coord_cartesian(ylim = c(-10,10))+
+  theme_gray(base_size = 30)+
+  geom_hline(yintercept = 0, linetype = 'dashed', size = 1, alpha = 0.5)
+
+aov.rc.sum = aov_ez(data = subset(vr.data.mbb.bt, !Block %in% c(1,3,5)), id = "Subject", dv = "rel.cont.diff.bt", within = c("Condition", "Load"))
+knitr::kable(nice(aov.rc.sum))
+```
+
+Here we see a main effect of Condition (LH vs. RH), and a Condition X Load interaction.
+
+```{r RC condition x load posthoc, warning=FALSE, echo=FALSE}
+m.rc.sum.me = emmeans(aov.rc.sum, ~Condition)
+pairs(m.rc.sum.me, infer = T)
+
+t.test(subset(vr.data.mbb.bt, Condition == "LH weighted")$rel.cont.diff.bt, mu = 0)
+t.test(subset(vr.data.mbb.bt, Condition == "RH weighted")$rel.cont.diff.bt, mu = 0)
+
+m.rc.sum.int = emmeans(aov.rc.sum, ~Load|Condition)
+pairs(m.rc.sum.int, infer = T)
+```
+
+Post-hoc analysis of the ME for Condition reveals that the wrist weight alters coordination. There is a significant difference between the LH and RH weighted conditions.  
+
+Moreover, both the LH and RH weighted conditions differ significantly from zero, indicating ***both*** weighting conditions alter coordination.  
+
+Further analysis of the Condition x Load interaction shows that while the increasing the load on the right hand does not significantly increase the RC of the left hand, placing greater load on the left hand increases RC of the right hand.  
+
+***  
+
+### Variability Analysis
+I've created a new data.frame **vr.data.sdbb** which contains the standard deviation per subject per block (within block variability).
+```{r RC Variability, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10}
+ggplot(data = subset(vr.data.sdbb, !Block %in% c(3,5)), aes(x = Condition, y = rel.cont, fill = Load))+
+  geom_boxplot()+
+  ylab(' Relative Contribution Variability (%)')+
+  coord_cartesian(ylim = c(0,5))+
+  theme_gray(base_size = 30)
+
+aov.rcvar.sum = aov_ez(data = subset(vr.data.sdbb, !Block %in% c(3,5)), id = "Subject", dv = "rel.cont", within = c("Condition", "Load"))
+knitr::kable(nice(aov.rcvar.sum))
+```
+
+There is neither a main effect for Condition nor a main effect for Load in the variability of RC. However, there is a Condition X Load interaction.
+
+```{r RC Variability posthoc, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10}
+m.rcvar.sum.int = emmeans(aov.rcvar.sum, ~Load|Condition)
+pairs(m.rcvar.sum.int, infer = T)
+```
+
+Post-hoc analysis shows that in the LH weighted Condition, increasing the load on the wrist slightly increases variability while reaching. This effect is significant, but quite small.  
+
+### Intermanual Analysis (coordination)
+For each of the following plots and stats, the plot illustrates the change in the given variable relative to baseline. The comparison to focus on is the Condition vs. Hand that are different. For example, one should focus on the change in movement time (mt) of the right hand (rh) in the LH weighted condition {and vice versa}.   
+
+Also, the ANOVAs and paired contrasts ***only contain the 60%*** condition. This is to give the best chance of finding a difference.
+```{r Kinematic intermanual analysis, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10}
+# mt ----------------------------------------------------------------------
+ggplot(data = subset(biman.data.mbb, !Condition %in% "Baseline"), aes(x = Condition, y = mt_bc, fill = Load))+
+  geom_boxplot()+
+  facet_grid(~Hand)+
+  geom_hline(yintercept = 0, linetype = 'dashed', size = 1, alpha = 0.5)+
+  labs(y = "\u0394 mt")+
+  theme_gray(base_size = 30)
+
+aov.mt = aov_ez(data = subset(biman.data.mbb, !Block %in% c(3,5) & Load == "60%"), id = "Subject", dv = "mt", within = c("Condition", "Hand"))
+aov.mt
+post.mt = emmeans(aov.mt, ~Condition|Hand)
+pairs(post.mt, infer = T)
+#
+
+# disp --------------------------------------------------------------------
+ggplot(data = subset(biman.data.mbb, !Condition %in% "Baseline"), aes(x = Condition, y = disp_bc, fill = Load))+
+  geom_boxplot()+
+  facet_grid(~Hand)+
+  geom_hline(yintercept = 0, linetype = 'dashed', size = 1, alpha = 0.5)+
+  labs(y = "\u0394 disp")+
+  theme_gray(base_size = 30)
+
+aov.disp = aov_ez(data = subset(biman.data.mbb, !Block %in% c(3,5) & Load == "60%"), id = "Subject", dv = "disp", within = c("Condition", "Hand"))
+aov.disp
+post.disp = emmeans(aov.disp, ~Condition|Hand)
+pairs(post.disp, infer = T)
+
+# VelPeak -----------------------------------------------------------------
+ggplot(data = subset(biman.data.mbb, !Condition %in% "Baseline"), aes(x = Condition, y = velPeak_bc, fill = Load))+
+  geom_boxplot()+
+  facet_grid(~Hand)+
+  geom_hline(yintercept = 0, linetype = 'dashed', size = 1, alpha = 0.5)+
+  labs(y = "\u0394 velPeak")+
+  theme_gray(base_size = 30)
+
+aov.velPeak = aov_ez(data = subset(biman.data.mbb, !Block %in% c(3,5) & Load == "60%"), id = "Subject", dv = "velPeak", within = c("Condition", "Hand"))
+aov.velPeak
+post.velPeak = emmeans(aov.velPeak, ~Condition|Hand)
+pairs(post.velPeak, infer = T)
+
+
+# time2pv -----------------------------------------------------------------
+ggplot(data = subset(biman.data.mbb, !Condition %in% "Baseline"), aes(x = Condition, y = time2pv_bc, fill = Load))+
+  geom_boxplot()+
+  facet_grid(~Hand)+
+  geom_hline(yintercept = 0, linetype = 'dashed', size = 1, alpha = 0.5)+
+  labs(y = "\u0394 time2pv")+
+  theme_gray(base_size = 30)
+
+aov.time2pv = aov_ez(data = subset(biman.data.mbb, !Block %in% c(3,5) & Load == "60%"), id = "Subject", dv = "time2pv", within = c("Condition", "Hand"))
+aov.time2pv
+post.time2pv = emmeans(aov.time2pv, ~Condition|Hand)
+pairs(post.time2pv, infer = T)
+
+# normC -------------------------------------------------------------------
+ggplot(data = subset(biman.data.mbb, !Condition %in% "Baseline"), aes(x = Condition, y = normC_bc, fill = Load))+
+  geom_boxplot()+
+  facet_grid(~Hand)+
+  geom_hline(yintercept = 0, linetype = 'dashed', size = 1, alpha = 0.5)+
+  labs(y = "\u0394 normC")+
+  theme_gray(base_size = 30)
+
+aov.normC = aov_ez(data = subset(biman.data.mbb, !Block %in% c(3,5) & Load == "60%"), id = "Subject", dv = "normC", within = c("Condition", "Hand"))
+aov.normC
+post.normC = emmeans(aov.normC, ~Condition|Hand)
+pairs(post.normC, infer = T)
+
+
+# normS -------------------------------------------------------------------
+ggplot(data = subset(biman.data.mbb, !Condition %in% "Baseline"), aes(x = Condition, y = normS_bc, fill = Load))+
+  geom_boxplot()+
+  facet_grid(~Hand)+
+  geom_hline(yintercept = 0, linetype = 'dashed', size = 1, alpha = 0.5)+
+  labs(y = "\u0394 normS")+
+  theme_gray(base_size = 30)
+
+aov.normS = aov_ez(data = subset(biman.data.mbb, !Block %in% c(3,5) & Load == "60%"), id = "Subject", dv = "normS", within = c("Condition", "Hand"))
+aov.normS
+post.normS = emmeans(aov.normS, ~Condition|Hand)
+pairs(post.normS, infer = T)
+
+```
+  
+As we can see from these analyses, the only significant change in the non-weighted limb kinematics comes from the endpoint positions (normC and normS). These two measures are defined as the norm of the vector pointing from either the VR headset center (normC) or the sphere located directly below the participant ~between the feet (normS).  
+
+**For normC**, we have a trend towards an increase final endpoint position in the left hand during RH weighting but no difference in right hand during LH weighting.
+
+**For normS**, we have in both weighting conditions the non-weighted limb ending up farther from the origin located on the floor. This is a better measure because it is a fixed location, whereas normC is actually specified as the mean cartesian position of the VR headset (additional source of variability).
+
+***
+
+# EMG
+
+## Muscle Activity: RMSE
+
+### RMSE target factor analysis
+Targets can appear -15 degrees from midline, at midline, and +15 degrees from midline - at both eye and shoulder levels.  Targets 5,6 left of midline, targets 7,8 (midline), targets 9,10 right of midline. Odd target #s are EYE level, Even target #s are SHOULDER level.
+```{r RMSE target factor analysis, echo=FALSE, warning=FALSE, fig.width=20,fig.height=10}
+# Reintroduce the 'Target' factor to determine if target location influence relative contribution.
+emg.data.ratio.mbb.bt = emg.data.ratio %>% select(-c(Trial, Day)) %>% group_by(Subject, Block, Condition, Load, Muscle, Target) %>% summarise_all(funs(mean(., na.rm = T)))
+ggplot(data = emg.data.ratio, aes(rmse.bc, fill = Condition))+
+  geom_histogram(position = 'identity', binwidth = 1)+
+  geom_vline(xintercept = 0, linetype = 'dashed')+
+  facet_grid(Condition~Load~Muscle~Target)
+
+aov.rr.bt = aov_ez(data = subset(emg.data.ratio.mbb.bt, Block %in% c(1)), id = "Subject", dv = "rmse.bc", within = c("Target"))
+knitr::kable(nice(aov.rr.bt))
+```  
+
+There is a trend (p = 0.053) a main effect of target. Lets go ahead and correct for target location, as this will improve continuity
+
+```{r RMSE ratio baseline correct by target, warning=FALSE, fig.width=20,fig.height=10}
+# Baseline correct w.r.t. Subject, Day, Muscle, AND TARGET
+# As %-change score
+# emg.data.ratio = emg.data.ratio %>% group_by(Subject, Day, Muscle, Target)%>%
+#   mutate(rmse.bc.bt = (rmse - mean(rmse[Block == 1]))/mean(rmse[Block == 1]))
+
+# As was done for relative contribution
+emg.data.ratio = emg.data.ratio %>% group_by(Subject, Day, Muscle, Target)%>%
+  mutate(rmse.bc.bt = rmse - mean(rmse[Block == 1]))
+
+# Outlier clean rmse.bc (any value outside 1.5*IQR)
+emg.data.ratio = emg.data.ratio %>% 
+  group_by(Condition, Load, Muscle, Block) %>%
+  mutate(rmse.bc.bt.oc = replace(rmse.bc.bt, (abs(rmse.bc.bt - median(rmse.bc.bt, na.rm = T)) > 1.5*IQR(rmse.bc.bt, na.rm = T)), NA))
+
+emg.data.ratio.mbb.bt = emg.data.ratio %>% select(-c(Trial, Day)) %>% group_by(Subject, Block, Condition, Load, Muscle, Target) %>% summarise_all(funs(mean(., na.rm = T)))
+ggplot(data = emg.data.ratio, aes(rmse.bc.bt.oc, fill = Condition))+
+  geom_histogram(position = 'identity', binwidth = 0.1)+
+  geom_vline(xintercept = 0, linetype = 'dashed')+
+  facet_grid(Condition~Load~Target)
+
+aov.rr.bt.bc = aov_ez(data = subset(emg.data.ratio.mbb.bt, Block %in% c(1)), id = "Subject", dv = "rmse.bc.bt.oc", within = c("Target"))
+knitr::kable(nice(aov.rr.bt.bc))
+```
+
+
+### RMSE Time series
+First Lets take a look at the RMSE timeseries. Here I am plotting the baseline corrected **and outlier cleaned** RMSE ratio (RH/LH ratio). Dotted line is placed at the value 0 that signifies no change from the baseline ratio between right and left side muscle activation. I have also done a 6-trial binning just like in RC.  
+
+That is, first I take the ratio of (raw RH RMSE / raw LH RMSE), then I baseline correct that ratio w.r.t. Block 1. This is done per subject, per day, per muscle. Then, I outlier clean as indicated above.
+```{r RMSE timeseries, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10}
+# Reduce data into 'bins' of trials
+nr = nrow(emg.data.ratio)
+numTrial = max(emg.data.ratio$Trial)
+numBlock = nlevels(emg.data.ratio$Block)
+numMuscle = nlevels(emg.data.ratio$Muscle)
+numSub = nr/numTrial/numBlock/numMuscle
+blockSize = 6 # Must be factor of 96
+emg.data.ratio$Bin = as.factor(rep(1:(numTrial/blockSize), each = blockSize, times = numSub*numBlock*numMuscle))
+# Take mean by bin
+emg.data.ratio.mbbin = emg.data.ratio %>% relocate(Bin, .after = Trial) %>% group_by(Subject, Condition, Block, Load, Muscle, Bin) %>%
+                            summarise_each(funs(mean(., na.rm = TRUE))) %>% select(-c(Trial, Target, Day))
+emg.data.ratio.mbbin$Bin = as.numeric(emg.data.ratio.mbbin$Bin)
+rm(nr)
+
+ggplot(data = subset(emg.data.ratio.mbbin, !Block %in% c(3,5)), aes(x = Bin, y = rmse.bc.oc, color = Condition))+
+  geom_hline(yintercept = 0, linetype = 'dashed')+
+  stat_summary(fun.data = 'mean_se')+
+  stat_summary(fun = 'mean', geom = 'line')+
+  facet_grid(Muscle~Load)+
+  labs(y = "\u0394 RH/LH rmse ratio (%)")+
+  theme(text = element_text(size = 14),
+        axis.text = element_text(size = 14))
+
+# ANOVA with the 'Binned' data. Allows to check for main effect of time (rmse ratio changing overtime due to fatigue or learning)
+aov.rr.ts = aov_ez(data = subset(emg.data.ratio.mbbin, !Block %in% c(3,5) & Bin %in% c(1,16)), id = "Subject", dv = "rmse.bc.oc", within = c("Condition","Bin", "Muscle"))
+knitr::kable(nice(aov.rr.ts))
+```
+
+Similar to the kinematic coordination patterns, muscle activity does not change throughout blocks/conditions. Therefore, I will group within blocks for further analyses.  
+
+***
+
+### RMSE Condition x Load x Muscle
+```{r RMSE condition x load x muslce omnibus, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10}
+ggplot(data = subset(emg.data.ratio, !Block %in% c(1,3,5)), aes(x = Condition, y = rmse.bc.bt.oc, fill = Load))+
+  geom_boxplot()+
+  ylab('\u0394 RH/LH rmse ratio (%)')+
+  #coord_cartesian(ylim = c(-100,100))+
+  theme_gray(base_size = 30)+
+  geom_hline(yintercept = 0, linetype = 'dashed', size = 1, alpha = 0.5)+
+  facet_grid(~Muscle)
+
+aov.rr.sum = aov_ez(data = subset(emg.data.ratio.mbb.bt, !Block %in% c(1,3,5)), id = "Subject", dv = "rmse.bc.bt.oc", within = c("Condition", "Load", "Muscle"))
+knitr::kable(nice(aov.rr.sum))
+```  
+
+Results show a main effect for condition, and Condition x Load
+
+```{r RMSE condition x load x muslce posthoc main effects, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10}
+m.rr.sum.me = emmeans(aov.rr.sum, ~Condition)
+pairs(m.rr.sum.me, infer = T)
+```  
+
+Now looking at interactions
+```{r RMSE condition x load x muslce posthoc interactions, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10}
+m.rr.sum.int.cl = emmeans(aov.rr.sum, ~Load|Condition)
+pairs(m.rr.sum.int.cl, infer = T)
+
+m.rr.sum.int.cm = emmeans(aov.rr.sum, ~Muscle|Condition)
+pairs(m.rr.sum.int.cm, infer = T)
+```  
+
+Further analysis of the Condition x Load interaction showed that an increase in load increased muscle activity when averaging across muscle.  
+Posthoc tests on the Condition x Muscle interaction show that muscle activity changed more in the biceps than in the deltoid for the right side. The opposite is true for the left side, although this was only a trend. NOTE: it is opposite because of the way I set up the ratio (just like in relative contribution). Therefore, I can reflect the data...
+
+But before that, lets look at the Condition x Muscle interaction more closely. Since we have a dose-response in the change in muscle activity w.r.t. load, the 30% load is likely attenuating the effect. Lets take only the 60% load and see what happens.
+```{r RMSE condition x load x muslce posthoc interactions: 60% LOAD ONLY, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10}
+aov.rr.sum.60 = aov_ez(data = subset(emg.data.ratio.mbb.bt, !Block %in% c(1,3,5) & Load == "60%"), id = "Subject", dv = "rmse.bc.bt.oc", within = c("Condition", "Muscle"))
+knitr::kable(nice(aov.rr.sum.60))
+
+m.rr.sum.int.cm.60 = emmeans(aov.rr.sum.60, ~Muscle|Condition)
+pairs(m.rr.sum.int.cm.60, infer = T)
+```
+
+***
+
+### RMSE in non-weighted hand
+These data show the raw RMSE values. *NOTE: this is not the RMSE ratio.* The left panel in the graph below shows a large rightward skew to the baseline corrected data. This is corrected by taking performing the outlier correction (exactly as was done for RMSE ratio).
+
+```{r RMSE Motor overflow - RMSE exploratory data analysis, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10}
+# Remove outliers
+temp = emg.data %>% 
+  group_by(Condition, Load, Muscle) %>%
+  mutate(rmse.bc.oc = replace(rmse.bc, (abs(rmse.bc - median(rmse.bc, na.rm = T)) > 1.5*IQR(rmse.bc, na.rm = T)), NA))
+
+# check the outlier calc by plotting
+p.rmse = ggplot(data = temp, aes(rmse.bc, fill = Condition))+
+  geom_histogram(position = 'identity', binwidth = 1)+
+  #coord_cartesian(xlim = c(-100,250))+
+  facet_grid(Location~Condition~Level)+
+  theme_gray(base_size = 30)+
+  guides(fill = "none")
+
+p.rmse.oc = ggplot(data = temp, aes(rmse.bc.oc, fill = Condition))+
+  geom_histogram(position = 'identity', binwidth = 1)+
+  #coord_cartesian(xlim = c(-100,250))+
+  facet_grid(Location~Condition~Level)+
+  theme_gray(base_size = 30)
+grid.arrange(p.rmse, p.rmse.oc, nrow=1)
+
+```
+
+This analysis then plots the change in RMSE (relative to baseline) for each muscle, each condition, and each load. Then one-sided t.tests are run to determine if the change differs from zero (baseline).
+```{r RMSE motor overflow - change in RMSE in non-weighted hand, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10}
+# Take Mean by block
+temp.mbb = temp %>% select(-c(Trial, Target, Day, Level, Location))%>%
+  group_by(Subject, Block, Condition, Load, Muscle)%>%
+  summarise_all(funs(mean(., na.rm = T)))
+
+
+ggplot(data = subset(temp.mbb, !Condition %in% "Baseline"), aes(x = Condition, y = rmse.bc.oc, fill = Load))+
+  geom_boxplot()+
+  facet_grid(~Muscle)+
+  geom_hline(yintercept = 0, linetype = 'dashed', size = 1, alpha = 0.5)+
+  labs(y = "\u0394 RMSE")+
+  theme_gray(base_size = 30)
+
+```  
+
+|Factor combo         |p-value  |
+|---------------------|---------|
+|LH weighted + Rbicep |`r t.test(subset(temp.mbb, Condition == "LH weighted" & Load == "60%" & Muscle == "R Bicep")$rmse.bc.oc, mu = 0)$p.value`|
+|RH weighted + Lbicep |`r t.test(subset(temp.mbb, Condition == "RH weighted" & Load == "60%" & Muscle == "L Bicep")$rmse.bc.oc, mu = 0)$p.value`|
+|LH weighted + Rdelt  |`r t.test(subset(temp.mbb, Condition == "LH weighted" & Load == "60%" & Muscle == "R Deltoid")$rmse.bc.oc, mu = 0)$p.value`|
+|LH weighted + Rbicep |`r t.test(subset(temp.mbb, Condition == "RH weighted" & Load == "60%" & Muscle == "L Deltoid")$rmse.bc.oc, mu = 0)$p.value`|
+
+From the plot and stats, its clear there is no change in RMSE in the non-weighted limb. The best possible combination of factors to show this would be in the 60% load, biceps. Squat going on here...   
+
+***  
+
+### Kinematics-EMG correlation/regression
+Below are data showing a significant relationship between the change in relative contribution and a change in muscle output laterality. The first graph shows the relationship between the two variables in the two loading conditions (RH vs. LH) as well as for both load levels (30% vs 60%)
+```{r Kinematics-EMG correlations/regressions, warning=FALSE, echo=FALSE, fig.width=20,fig.height=10}
+bicep = subset(emg.data.ratio.mbb, Muscle == "Bicep")$rmse.bc.oc
+deltoid = subset(emg.data.ratio.mbb, Muscle == "Deltoid")$rmse.bc.oc
+
+df.corr.bicep = cbind(vr.data.mbb, bicep)
+df.corr.bicep = df.corr.bicep %>% rename(emg.diff = ...29)
+df.corr.deltoid = cbind(vr.data.mbb, deltoid)
+df.corr.deltoid = df.corr.deltoid %>% rename(emg.diff = ...29)
+
+ggplot(data = subset(df.corr.bicep, !Condition == "Baseline"), aes(x = emg.diff, y = rel.cont.diff))+
+  geom_point(aes(color = Condition, shape = Load, size = 2))+
+  geom_smooth(method = 'lm')+
+  theme_gray(base_size = 30)+
+  guides(size = FALSE, shape = FALSE)
+```
+This plot shows the change in RC vs. change in RMSE ratio for the LH and RH weighted conditions. **NOTE: this is for the BICEPS only.** The circles represent the 30% load and triangles show the 60% load. The fit is a linear model with 95% CI shown in the fill.  
+
+
+#### Biceps
+The correlation between a change in relative contribution vs. a change in the muscle output laterality: 
+`r cor.test(df.corr.bicep$rel.cont.diff, df.corr.bicep$emg.diff, use = "pairwise.complete.obs")$estimate`
+(p.value = `r cor.test(df.corr.bicep$rel.cont.diff, df.corr.bicep$emg.diff, use = "pairwise.complete.obs")$p.value`)
+
+Regression analysis for the **Biceps**
+```{r Biceps regression, echo=FALSE}
+lm.bicep <- lm(rel.cont.diff ~ emg.diff, data=df.corr.bicep)
+summary(lm.bicep)
+```
+
+#### Deltoid
+Correlation between kin vs. emg in deltoid:
+`r cor.test(df.corr.deltoid$rel.cont.diff, df.corr.deltoid$emg.diff, use = "pairwise.complete.obs")$estimate`
+(p.value = `r cor.test(df.corr.deltoid$rel.cont.diff, df.corr.deltoid$emg.diff, use = "pairwise.complete.obs")$p.value`)
+
+Regression analysis for the **Deltoid**
+```{r Deltoid regression, echo = FALSE, fig.width=20,fig.height=10}
+ggplot(data = subset(df.corr.deltoid, !Condition == "Baseline"), aes(x = emg.diff, y = rel.cont.diff))+
+  geom_point(aes(color = Condition, shape = Load, size = 2))+
+  geom_smooth(method = 'lm')+
+  theme_gray(base_size = 30)+
+  guides(size = FALSE, shape = FALSE)
+lm.deltoid <- lm(rel.cont.diff ~ emg.diff, data=df.corr.deltoid)
+summary(lm.deltoid)
+```
+

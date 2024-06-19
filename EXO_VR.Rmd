@@ -1,0 +1,218 @@
+---
+title: "EXO_VR"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load packages
+```{r Load packages}
+library(tidyverse)
+library(afex)
+library(readxl)
+'%notin%' <- Negate('%in%') # Make custom 'not in' function. Works exactly like != but with better results
+```
+
+```{r Import Data}
+# Mac computer
+# setwd('//Users//alexbrunfeldt//Dropbox//Catholic U//VR_EXO//post compile')
+# p.table = read_xlsx('//Users//alexbrunfeldt//Dropbox//Catholic U//VR_EXO//VR_participant_list.xlsx')
+
+# PC computer
+setwd('C:\\Users\\Alex\\Dropbox\\Catholic U\\VR_EXO\\post compile') # PC
+p.table = read_xlsx('C:\\Users\\Alex\\Dropbox\\Catholic U\\VR_EXO\\VR_participant_list.xlsx')
+
+vr.data = read.delim('exovr_postMatlab',header = FALSE, sep = ",", na.strings = 'NaN') # load in data
+# Make sure the colnames match these (copied straight from Matlab)
+# data = [(1:length(trialData))', targetNum, lhMaxDisp, rhMaxDisp, cursorMaxDisp, relContrib, lhNormS,...
+#     rhNormS, lhNormC, rhNormC, lagOUT, lagLAP, mt, mtLH, mtRH, velPeakLH, t2pvLH, velPeakRH, t2pvRH];
+
+colnames(vr.data) = c('Subject', 'Condition', 'Block', 'Trial', 'Target',
+                      'disp.lh', 'disp.rh', 'disp.cursor', 'rel.cont',
+                      'lh.normS', 'rh.normS', 'lh.normC', 'rh.normC',
+                      'lag.out', 'lag.lap',
+                      'mt', 'mtLH', 'mtRH', 'peak.vel.lh', 'time2.peak.vel.lh',
+                      'peak.vel.rh', 'time2.peak.vel.rh') # rename variables
+
+# Recode Condition to match intervention
+vr.data = vr.data %>% mutate(Condition = recode(Condition,
+                                        '1' = "Baseline",
+                                        '2' = "RH weighted",
+                                        '3' = "LH weighted",
+                                        '4' = "Combo"))
+vr.data$rel.cont = 100*vr.data$rel.cont # Convert to %
+
+# Uncomment for post 12-07-20 data
+vr.data$norm.diffS = vr.data$rh.normS - vr.data$lh.normS
+vr.data$norm.diffC = vr.data$rh.normC - vr.data$lh.normC
+
+# Identify in the 'Load' factor in the VR_participant_list excel file
+subs.day1.30 = subset(p.table, grepl("3", Intervention))$subID01 # Find subjects who did 30% on day 1
+subs.day1.60 = subset(p.table, grepl("6", Intervention))$subID01 # Find subjects who did 60% on day 1
+subs.day2.30 = subset(p.table, !subID01 %in% subs.day1.30)$subID02 # Find subjects who did 30% on day 2
+subs.day2.60 = subset(p.table, !subID01 %in% subs.day1.60)$subID02 # Find subjects who did 60% on day 2
+
+# Add in the 'Load' and 'Day' factors
+vr.data = vr.data %>% mutate(Load = case_when(Subject %in% subs.day1.30 ~ "30%",
+                                              Subject %in% subs.day1.60 ~ "60%",
+                                              Subject %in% subs.day2.30 ~ "30%",
+                                              Subject %in% subs.day2.60 ~ "60%")) %>%
+                      mutate(Day = case_when(Subject %in% c(subs.day1.30, subs.day1.60) ~ "Day 1",
+                                          Subject %in% c(subs.day2.30, subs.day2.60) ~ "Day 2")) %>%
+                      relocate(Load, .after = Target) %>% relocate(Day, .after = Load)
+
+# Replace day 2 Subject identiers with the corresponding day 1 subject identifiers. NOTE: this is coded in the p.table variable from the Excel file!!!
+for (i in 1:nrow(p.table)){
+  if (!is.na(p.table$subID01[i]) & !is.na(p.table$subID02[i])) # Only recode non-"NA" values
+  {
+    vr.data[vr.data$Subject == p.table$subID02[i],]$Subject = p.table$subID01[i]
+  }
+}
+
+# Remove outlier participants (ie: left handers, no-shows, etc...)
+outliers = c(73823902)
+vr.data = subset(vr.data, !Subject %in% outliers)
+# Set Factors
+factors = c('Subject', 'Condition', 'Block', 'Target', 'Load', 'Day')
+vr.data[,factors] = lapply(vr.data[,factors], factor)
+rm(subs.day1.30, subs.day1.60, subs.day2.30, subs.day2.60, factors, i)
+```
+
+```{r Data Wrangling, warning = FALSE}
+# Create new variable: difference measure between each trial and the mean of baseline block 1
+vr.data = vr.data %>% group_by(Subject, Day) %>% mutate(rel.cont.diff = rel.cont - mean(rel.cont[Block == 1]))
+vr.data = vr.data %>% group_by(Subject, Day) %>% mutate(rel.cont.diff.preceed = case_when(Block %in% 1 ~ rel.cont - mean(rel.cont[Block == 1]),
+                                                                                     Block %in% 2 ~ rel.cont - mean(rel.cont[Block == 1]),
+                                                                                     Block %in% 3 ~ rel.cont - mean(rel.cont[Block == 3]),
+                                                                                     Block %in% 4 ~ rel.cont - mean(rel.cont[Block == 3]),
+                                                                                     Block %in% 5 ~ rel.cont - mean(rel.cont[Block == 5])))
+
+# Baseline correct the lh and rh displacement values too
+vr.data = vr.data %>% group_by(Subject, Day) %>% mutate(disp.lh.diff = disp.lh - mean(disp.lh[Block == 1]),
+                                                        disp.rh.diff = disp.rh - mean(disp.rh[Block == 1]))
+
+# Outlier clean rel.cont.diff (any value outside 1.5*IQR)
+vr.data = vr.data %>% 
+  group_by(Condition, Load) %>%
+  mutate(rel.cont.diff.oc = replace(rel.cont.diff, (abs(rel.cont.diff - median(rel.cont.diff)) > 1.5*IQR(rel.cont.diff)), NA))
+
+# Mean by block
+vr.data.mbb = vr.data %>% select(-c(Trial, Target, Day)) %>% group_by(Subject, Block, Condition, Load) %>% summarise_all(funs(mean(., na.rm = T)))
+# vr.data.mbb = vr.data %>% select(-c(Trial, Target)) %>% group_by(Subject,Block, Condition) %>% summarise_all(list(mean = mean, sd = sd))
+
+# SD by block
+vr.data.sdbb = vr.data %>% select(-c(Trial, Target, Day)) %>% group_by(Subject, Block, Condition, Load) %>% summarise_all(funs(sd(., na.rm = T)))
+
+# Reduce data into 'bins' of trials
+nr = nrow(vr.data)
+numTrial = max(vr.data$Trial)
+numBlock = nlevels(vr.data$Block)
+numSub = nr/numTrial/numBlock
+blockSize = 6 # Must be factor of 96
+vr.data$Bin = as.factor(rep(1:(numTrial/blockSize), each = blockSize, times = numSub*numBlock))
+# Take mean by block
+vr.data.mbbin = vr.data %>% relocate(Bin, .after = Trial) %>% group_by(Subject, Condition, Block, Load, Bin) %>%
+                            summarise_each(funs(mean(., na.rm = TRUE))) %>% select(-c(Trial, Target, Day))
+vr.data.mbbin$Bin = as.numeric(vr.data.mbbin$Bin)
+rm(nr)
+```
+
+```{r Intermanual comparisons (hand timing, peak vel), warning=FALSE}
+# Create bimanual dataframe. This has factor 'Hand' to make intermanual comparisons easy
+biman.data = vr.data %>%
+  select(c(Subject, Condition, Block, Trial, Load,
+                            disp.lh, disp.rh, lh.normC, rh.normC, lh.normS, rh.normS,
+                            mtLH, mtRH, peak.vel.lh, peak.vel.rh, time2.peak.vel.lh, time2.peak.vel.rh))%>%
+  rename(lh.disp = disp.lh, rh.disp = disp.rh, lh.mt = mtLH, rh.mt = mtRH,
+         lh.velPeak = peak.vel.lh, rh.velPeak = peak.vel.rh, lh.time2pv = time2.peak.vel.lh, rh.time2pv = time2.peak.vel.rh)%>%
+  pivot_longer(cols = !c(Subject, Condition, Block, Trial, Load), names_sep = "\\.", names_to = c("Hand", "Var"), values_to = "value")%>%
+  pivot_wider(names_from = Var, values_from = value)
+
+# Baseline correct
+biman.data = biman.data %>% group_by(Subject, Load, Hand) %>% mutate_each(funs(bc = .-mean(.[Block==1])), -c(Condition, Block, Trial))
+
+# Mean by block
+biman.data.mbb = biman.data %>% select(-Trial) %>% group_by(Subject, Condition, Block, Load, Hand) %>% summarise_all(funs(mean(., na.rm = T)))
+
+# This is an alternaltive option for movement time data. Since cursor MT is calculated differently than the individual hand MTs
+# Cursor: start/stop are a result of indSpawn and indHit from Matlab (cursor + block collision)
+# Hands: start/stop are a result of hand reaching its maximum displacement
+# mt.data = vr.data %>% select(c(Subject, Condition, Block, Load, mt, mtLH, mtRH)) %>%
+#   rename(cursor = mt, left = mtLH, right = mtRH) %>%
+#   pivot_longer(!c(Subject, Condition, Block, Load), names_to = "Hand", values_to = "mt") %>% arrange(Hand)
+# mt.data = mt.data %>% group_by(Subject, Load, Hand) %>% mutate(mt.diff = mt - mean(mt[Block == 1]))
+# mt.data.mbb = mt.data %>% group_by(Subject, Condition, Block, Load, Hand) %>% summarise_all(funs(mean(., na.rm = T)))
+```
+
+```{r Plotting, include= FALSE}
+##### Remove some subject from plotting ############
+vr.data.plot = vr.data %>% filter(!Subject %in% outliers, !Block %in% c(3,5))
+
+ggplot(data = vr.data.plot, aes(x = Trial, y = rel.cont, color = Condition))+
+  geom_point()+
+  geom_smooth()+
+  geom_hline(yintercept = 50, linetype = 'dashed')+
+  ylab('Relative Contribution (%)')+
+  coord_cartesian(ylim = c(40,60))
+
+ggplot(data = vr.data.plot, aes(x = Condition, y = rel.cont))+
+  geom_boxplot()
+
+ggplot(data = vr.data.plot, aes(x = Trial, y = rel.cont, color = Condition, shape = Load))+
+  geom_point()+
+  geom_hline(yintercept = 50, linetype = 'dashed')+
+  facet_grid(rows = vars(Block), cols = vars(Subject))+
+  ylab('Relative Contribution (%)')
+
+ggplot(data = vr.data.plot, aes(x = Target, y = rel.cont, fill = Condition))+
+  geom_bar(stat = "identity", position = 'dodge')+
+  geom_hline(yintercept = 50, linetype = 'dashed')+
+  ylab('Relative Contribution (%)')
+
+ggplot(data = vr.data.plot, aes(x = Target, y = disp.cursor, fill = Subject))+
+  geom_bar(stat = "identity", position = 'dodge')+
+  ylab('Displacement (m)')
+
+ggplot(data = vr.data.plot, aes(x = Trial, y = norm.diffS, color = Condition))+
+  geom_point()+
+  geom_smooth()+
+  ylab('Reach Norm Difference "sphere" (m)')
+
+ggplot(data = vr.data.plot, aes(x = Trial, y = norm.diffC, color = Condition))+
+  geom_point()+
+  geom_smooth()+
+  ylab('Reach Norm Difference "centerEye" (m)')
+
+ggplot(data = vr.data.plot, aes(x = Trial, y = norm.diffS, color = Condition))+
+  geom_point()+
+  facet_grid(rows = vars(Block), cols = vars(Subject))+
+  ylab('Reach Norm Difference "sphere" (m)')
+
+ggplot(data = vr.data.plot, aes(x = Trial, y = norm.diffC, color = Condition))+
+  geom_point()+
+  facet_grid(rows = vars(Block), cols = vars(Subject))+
+  ylab('Reach Norm Difference "centerEye" (m)')
+```
+
+```{r Initial stats, include= FALSE}
+# Remove outliers
+vr.data.mbb = vr.data.mbb %>% filter(!Subject %in% outliers)
+# ANOVA comparing conditions: Baseline (only block 1) vs. LH weighted, vs. RH weighted
+aov_ez(data = subset(vr.data.mbb, !Block %in% c(3,5)), id = "Subject", dv = "rel.cont", within = "Condition")
+# Followup t-tests
+t.test(subset(vr.data.mbb, Block == 1 & Condition == "Baseline")$rel.cont, subset(vr.data.mbb, Condition == "RH weighted")$rel.cont, paired = T)
+t.test(subset(vr.data.mbb, Block == 1 & Condition == "Baseline")$rel.cont, subset(vr.data.mbb, Condition == "LH weighted")$rel.cont, paired = T)
+t.test(subset(vr.data.mbb, Condition == "LH weighted")$rel.cont, subset(vr.data.mbb, Condition == "RH weighted")$rel.cont, paired = T)
+
+# T.test using the rel.cont.diff variable (should give exact same result as the 3rd contrast above...)
+t.test(subset(vr.data.mbb, Condition == "LH weighted")$rel.cont.diff, subset(vr.data.mbb, Condition == "RH weighted")$rel.cont.diff, paired = T)
+
+# T.test using the re.cont.diff.preceed variable means correcting for any potential bias accumulated in the 2nd block. This should be negligible since we are counterbalancing, but its a good check anyway.
+t.test(subset(vr.data.mbb, Condition == "LH weighted")$rel.cont.diff.preceed, subset(vr.data.mbb, Condition == "RH weighted")$rel.cont.diff.preceed, paired = T)
+
+# ANOVA with the 'Binned' data. Allows to check for main effect of time (rel. cont. changing overtime due to fatigue or learning)
+aov_ez(data = subset(vr.data.mbbin, !Block %in% c(3,5) & Bin %in% c(1,16)), id = "Subject", dv = "rel.cont", within = c("Condition","Bin"))
+```
+
