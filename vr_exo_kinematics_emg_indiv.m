@@ -10,15 +10,15 @@
 clear all
 close all
 if strcmp(computer, 'PCWIN64')
-    cd('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\raw data\vr\Wrist weight and healthy control manuscript data\');
+    cd('C:\Users\REDACTED\');
     file = uigetfile('*.xdf');
     data = load_xdf(file);
-    emg = delsysEMGimport2(['C:\Users\Alex\Dropbox\Catholic U\VR_EXO\EMG\Raw EMG Data\Manuscript Data\' file(1:11) '/' file(1:end-4) '_emg.csv']); % This may take a few minutes
+    emg = delsysEMGimport2(['C:\REDACTED\' file(1:11) '/' file(1:end-4) '_emg.csv']); % This may take a few minutes
 else
-    cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/raw data/vr/Wrist weight and healthy control manuscript data/')
+    cd('/Users/REDACTED/')
     file = uigetfile('*.xdf');
     data = load_xdf(file);
-    emg = delsysEMGimport2(['/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/EMG/Raw EMG Data/Manuscript Data/' file(1:11) '/' file(1:end-4) '_emg.csv']); % This may take a few minutes
+    emg = delsysEMGimport2(['/REDACTED/' file(1:11) '/' file(1:end-4) '_emg.csv']); % This may take a few minutes
 end
 
 
@@ -283,7 +283,7 @@ targets = targetHit(1,:)'; % pass along the target location data
 % Export Data to then load into Matlab 2013 & Neurospec 2.0
 kfggfkkfggkf
 if strcmp(computer, 'PCWIN64')
-    save(['C:\Users\Alex\Dropbox\Catholic U\VR_EXO\Neurospec development\neurospec_dev_data\',file(1:end-4),'_emg.mat'], 'ldelt', 'rdelt', 'lbicep', 'rbicep', 'trig', 'freq', 'onsetoffsetLH', 'onsetoffsetRH', 'targets')
+    save(['C:\REDACTED\',file(1:end-4),'_emg.mat'], 'ldelt', 'rdelt', 'lbicep', 'rbicep', 'trig', 'freq', 'onsetoffsetLH', 'onsetoffsetRH', 'targets')
 else
-    save(['/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/Neurospec development/neurospec_dev_data/',file(1:end-4),'_emg.mat'], 'ldelt', 'rdelt', 'lbicep', 'rbicep', 'trig', 'freq', 'onsetoffsetLH', 'onsetoffsetRH', 'targets')
+    save(['/Users/REDACTED/',file(1:end-4),'_emg.mat'], 'ldelt', 'rdelt', 'lbicep', 'rbicep', 'trig', 'freq', 'onsetoffsetLH', 'onsetoffsetRH', 'targets')
 end
