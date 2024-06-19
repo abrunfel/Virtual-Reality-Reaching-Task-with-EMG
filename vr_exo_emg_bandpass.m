@@ -3,15 +3,15 @@ clear all; close all
 % Select desired folder (do not hit 'Enter' key. You must highlight the
 % folder, then hit "Select Folder" button on popup.
 if strcmp(computer, 'PCWIN64')
-    selpath = uigetdir('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\EMG\Raw EMG Data\Manuscript Data');
+    selpath = uigetdir('C:\Users\REDACTED');
     subid = selpath(end-10:end);
-    cd('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\Neurospec development\neurospec_dev_data\mansucript data')
+    cd('C:\Users\REDACTED')
     files = dir(['*' subid '*']);
     clear subid % remove this so as to not confuse with the datenum subid
 else
     selpath = uigetdir('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/EMG/Raw EMG Data');
     subid = selpath(end-10:end);
-    cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/Neurospec development/neurospec_dev_data')
+    cd('/Users/REDACTED')
     files = dir(['*' subid '*']);
     clear subid % remove this so as to not confuse with the datenum subid
 end
