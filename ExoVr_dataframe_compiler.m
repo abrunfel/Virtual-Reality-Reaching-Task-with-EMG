@@ -4,9 +4,9 @@ close all
 
 % Select current directory
 if strcmp(computer, 'PCWIN64')
-    cd('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\post processes data');    
+    cd('C:\Users\REDACTED');    
 else
-    cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/post processes data');
+    cd('/Users/REDACTED');
 end
 
 dir_list = dir('exovr*.mat');    %Store subject *mat data file names in variable (struct array).
@@ -20,9 +20,9 @@ for i = 1:numFiles
    
    % Switch to post-compile folder
    if strcmp(computer, 'PCWIN64')
-       cd('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\post compile');
+       cd('C:\Users\REDACTED');
    else
-       cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/post compile');
+       cd('/Users/REDACTED');
    end
    
    % Write data to file, appending as loop runs
@@ -30,8 +30,8 @@ for i = 1:numFiles
    
    % Select current directory
    if strcmp(computer, 'PCWIN64')
-       cd('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\post processes data');
+       cd('C:\Users\REDACTED');
    else
-       cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/post processes data');
+       cd('/Users/REDACTED');
    end
 end
