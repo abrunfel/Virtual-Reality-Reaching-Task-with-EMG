@@ -21,11 +21,11 @@ invert = 1; % Default is 1
 % files exists in the folder, it will be included in the exported
 % dataframe!
 if strcmp(computer, 'PCWIN64')
-    cd('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\raw data\vr')
+    cd('C:\Users\REDACTED')
     files = dir(['*' subid '*']);
     clear subid % remove this so as to not confuse with the datenum subid
 else
-    cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/raw data/vr')
+    cd('/Users/REDACTED')
     files = dir(['*.xdf']);
     clear subid % remove this so as to not confuse with the datenum subid
 end
@@ -35,13 +35,13 @@ for k = 1:length(files)
     filename = files(k).name;
     DFexport = vr_exo_kin(filename, invert);
     if strcmp(computer, 'PCWIN64')
-        cd('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\post processes data')
+        cd('C:\Users\REDACTED')
         save(['exovr_', num2str(DFexport(1,1)), '_', filename(13:14), '_', filename(16:17), '.mat'], 'DFexport');
-        cd('C:\Users\Alex\Dropbox\Catholic U\VR_EXO\raw data\vr');
+        cd('C:\Users\REDACTED');
     else
-        cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/post processes data')
+        cd('/Users/REDACTED')
         save(['exovr_', num2str(DFexport(1,1)), '_', filename(13:14), '_', filename(16:17), '.mat'], 'DFexport');
-        cd('/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/raw data/vr');
+        cd('/Users/REDACTED');
     end
 end
 %
@@ -53,9 +53,9 @@ function DFexport = vr_exo_kin(file, invert)
 % Data import
 % Load in xdf file from LabStreamLayer Recorder in Unity
 if strcmp(computer, 'PCWIN64')
-    data = load_xdf(['C:\Users\Alex\Dropbox\Catholic U\VR_EXO\raw data\vr\' file]);
+    data = load_xdf(['C:\Users\REDACTED' file]);
 else
-    data = load_xdf(['/Users/alexbrunfeldt/Dropbox/Catholic U/VR_EXO/raw data/vr/' file]);
+    data = load_xdf(['/Users/REDACTED' file]);
 end
 
 %% Create arrays for each data stream's timeseries and timestamp data
